@@ -2,74 +2,115 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from arabic_reshaper import reshape
+from bidi.algorithm import get_display
 
-# إعداد الصفحة
-st.set_page_config(page_title="Laundro-Sim Pro", layout="wide")
+# إعدادات الصفحة والتصميم
+st.set_page_config(page_title="Laundro-Sim Pro", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("🧺 لوحة التحكم المالية للمغسلة الذكية")
+# دالة لإصلاح اللغة العربية في الرسوم البيانية
+def fix_ar(text):
+    try:
+        return get_display(reshape(text))
+    except:
+        return text
+
+st.title("🚀 محاكي القرار الاستراتيجي - المغسلة الذكية")
 st.markdown("---")
 
-# --- القسم الأول: المدخلات الرقمية (بدون Sliders) ---
-st.subheader("⚙️ إعدادات التشغيل السريعة")
+# --- واجهة الإدخال العملية (بدون Sliders) ---
+st.subheader("⚙️ إعدادات النموذج المالي")
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.info("💰 استراتيجية البيع")
-    # استخدام number_input بدلاً من slider لسهولة التحكم
-    wash_price = st.number_input("سعر الغسلة (دج)", min_value=100, max_value=1000, value=250, step=5)
-    dryer_units = st.number_input("وحدات التجفيف/زبون", min_value=0.0, max_value=10.0, value=2.0, step=1.0)
+    wash_price = st.number_input("سعر الغسلة (دج)", min_value=100, value=250, step=10)
+    dryer_unit_price = st.number_input("سعر وحدة التجفيف (12د)", min_value=0, value=100, step=5)
+    dryer_units = st.number_input("متوسط وحدات التجفيف/زبون", min_value=0.0, value=2.0, step=1)
 
 with col2:
-    st.info("📈 حجم العمل")
-    daily_customers = st.number_input("عدد الزبائن يومياً", min_value=1, max_value=200, value=20, step=1)
-    days_per_month = st.number_input("أيام العمل/شهر", min_value=1, max_value=31, value=30, step=1)
+    st.info("📈 حجم الإقبال والعمل")
+    daily_customers = st.number_input("عدد الزبائن يومياً", min_value=1, value=20, step=1)
+    days_per_month = st.number_input("أيام العمل في الشهر", min_value=1, max_value=31, value=30, step=1)
 
 with col3:
-    st.info("🧪 التكاليف المباشرة")
-    detergent = st.number_input("منظفات/غسلة (دج)", min_value=0, max_value=500, value=80, step=5)
-    energy = st.number_input("طاقة/غسلة (دج)", min_value=0, max_value=500, value=35, step=5)
+    st.info("🧪 تكاليف التشغيل المباشرة")
+    detergent = st.number_input("المنظفات (دج/دورة)", min_value=0, value=80, step=5)
+    energy_wash = st.number_input("طاقة الغسيل (دج/دورة)", min_value=0, value=35, step=5)
+    energy_dry = st.number_input("طاقة التجفيف (دج/وحدة)", min_value=0, value=15, step=5)
 
-# --- القسم الثاني: المصاريف الثابتة والاستثمار ---
 with st.expander("🏢 المصاريف الثابتة ورأس المال"):
     f_col1, f_col2, f_col3 = st.columns(3)
-    salary = f_col1.number_input("الرواتب الشهرية (دج)", value=35000, step=1000)
-    fixed_extra = f_col2.number_input("مصاريف أخرى ثابتة", value=10000, step=500)
-    investment = f_col3.number_input("إجمالي الاستثمار (دج)", value=1450000, step=50000)
+    salary = f_col1.number_input("إجمالي الرواتب الشهرية", value=35000, step=1000)
+    fixed_extra = f_col2.number_input("مصاريف ثابتة أخرى", value=10000, step=500)
+    investment = f_col3.number_input("إجمالي الاستثمار الأولي", value=1450000, step=50000)
 
-# --- المعادلات الحسابية ---
-# تكلفة الصيانة المحتسبة لكل دورة
-maint_cost = 20
-# صافي ربح الزبون الواحد
-profit_per_cust = (wash_price + (dryer_units * 100)) - (detergent + energy + (dryer_units * 15) + maint_cost)
-# الربح الصافي الشهري
-monthly_net = (profit_per_cust * daily_customers * days_per_month) - (salary + fixed_extra)
-# فترة الاسترداد
-payback_period = investment / monthly_net if monthly_net > 0 else 0
+# --- المعادلات الحسابية المتقدمة ---
+maint_per_cycle = 20
+revenue_per_cust = wash_price + (dryer_units * dryer_unit_price)
+cost_per_cust = detergent + energy_wash + (dryer_units * energy_dry) + maint_per_cycle
+profit_per_cust = revenue_per_cust - cost_per_cust
 
-# --- القسم الثالث: النتائج الرئيسية ---
+monthly_revenue = revenue_per_cust * daily_customers * days_per_month
+monthly_expenses = (cost_per_cust * daily_customers * days_per_month) + salary + fixed_extra
+monthly_net = monthly_revenue - monthly_expenses
+
+payback_months = investment / monthly_net if monthly_net > 0 else 0
+roi_annual = (monthly_net * 12 / investment) * 100 if investment > 0 else 0
+break_even_cust = (salary + fixed_extra) / (profit_per_cust * days_per_month) if profit_per_cust > 0 else 0
+
+# --- عرض النتائج الاستراتيجية ---
 st.divider()
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("الربح الصافي (شهري)", f"{monthly_net:,.0f} دج")
-m2.metric("فترة الاسترداد", f"{payback_period:.1f} شهر")
-m3.metric("نقطة التعادل (زبون/يوم)", f"{(salary + fixed_extra) / (profit_per_cust * days_per_month):.1f}")
-m4.metric("ربح الزبون الواحد", f"{profit_per_cust:,.0f} دج")
+m2.metric("فترة الاسترداد", f"{payback_months:.1f} شهر")
+m3.metric("نقطة التعادل (زبون/يوم)", f"{break_even_cust:.1f}")
+m4.metric("العائد السنوي ROI", f"{roi_annual:.1f} %")
 
-# --- القسم الرابع: الرسوم البيانية ---
+# --- التحليل البياني ---
 st.divider()
-months = np.arange(0, 31) # توقعات لسنتين ونصف
-cumulative = (monthly_net * months) - investment
+tab1, tab2 = st.tabs(["📉 مسار الأرباح", "📊 هيكل التكاليف"])
 
-fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(months, cumulative, color='#2ecc71' if monthly_net > 0 else '#e74c3c', linewidth=3)
-ax.axhline(0, color='black', linestyle='--', alpha=0.5)
-ax.set_title("Capital Recovery Timeline")
-ax.set_xlabel("Months")
-ax.set_ylabel("Net Value (DZD)")
-ax.grid(True, alpha=0.2)
-st.pyplot(fig)
+with tab1:
+    months = np.arange(0, 31)
+    cumulative = (monthly_net * months) - investment
+    
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(months, cumulative, color='#2ecc71' if monthly_net > 0 else '#e74c3c', linewidth=3)
+    ax.axhline(0, color='black', linestyle='--', alpha=0.3)
+    
+    # حل مشكلة اللغة العربية في العناوين
+    ax.set_title(fix_ar("توقعات استرداد رأس المال (30 شهر)"))
+    ax.set_xlabel(fix_ar("الأشهر"))
+    ax.set_ylabel(fix_ar("القيمة التراكمية (دج)"))
+    ax.grid(True, alpha=0.1)
+    st.pyplot(fig)
 
-# رسالة ذكية في الأسفل
-if monthly_net > 0:
-    st.success(f"✨ التوقعات إيجابية: ستمتلك مشروعاً يدر {monthly_net*12:,.0f} دج سنوياً بعد استرداد رأس المال.")
+with tab2:
+    # مقارنة الدخل والمصاريف
+    st.write(f"**إجمالي الدخل الشهري:** {monthly_revenue:,.0f} دج")
+    st.write(f"**إجمالي المصاريف الشهرية:** {monthly_expenses:,.0f} دج")
+    st.progress(min(max(monthly_expenses/monthly_revenue, 0.0), 1.0) if monthly_revenue > 0 else 0)
+    st.caption("نسبة المصاريف من إجمالي الدخل")
+
+# --- رسائل دعم القرار (Logic Engine) ---
+if monthly_net <= 0:
+    st.error("⚠️ تحذير: النموذج الحالي يظهر خسارة. زد السعر أو قلل الرواتب.")
+elif payback_months > 18:
+    st.warning(f"ℹ️ تنبيه: فترة الاسترداد ({payback_months:.1f} شهر) تعتبر طويلة نسبياً لهذا النوع من المشاريع.")
 else:
-    st.error("⚠️ النموذج الحالي يظهر خسارة شهرية. يرجى تعديل الأسعار أو تقليل المصاريف.")
+    st.success("✨ مؤشرات ممتازة: المشروع يظهر كفاءة عالية في استرداد رأس المال.")
+
+# إضافة خاصية التصدير (نصية حالياً لسهولة النسخ)
+if st.button("📝 توليد ملخص التقرير للنسخ"):
+    report = f"""
+    تقرير مشروع المغسلة الذكية:
+    --------------------------
+    - سعر الغسلة: {wash_price} دج
+    - الربح الصافي الشهري المتوقع: {monthly_net:,.0f} دج
+    - فترة استرداد رأس المال: {payback_months:.1f} شهر
+    - نقطة التعادل: {break_even_cust:.1f} زبون يومياً
+    --------------------------
+    طُبع بتاريخ: 2026-05-07
+    """
+    st.code(report)
