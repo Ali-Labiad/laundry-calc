@@ -16,8 +16,8 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.info("💰 استراتيجية البيع")
     # استخدام number_input بدلاً من slider لسهولة التحكم
-    wash_price = st.number_input("سعر الغسلة (دج)", min_value=100, max_value=1000, value=250, step=10)
-    dryer_units = st.number_input("وحدات التجفيف/زبون", min_value=0.0, max_value=10.0, value=2.0, step=0.5)
+    wash_price = st.number_input("سعر الغسلة (دج)", min_value=100, max_value=1000, value=250, step=5)
+    dryer_units = st.number_input("وحدات التجفيف/زبون", min_value=0.0, max_value=10.0, value=2.0, step=1.0)
 
 with col2:
     st.info("📈 حجم العمل")
