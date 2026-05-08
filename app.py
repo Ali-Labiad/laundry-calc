@@ -26,7 +26,7 @@ with col1:
     st.info("💰 استراتيجية البيع")
     wash_price = st.number_input("سعر الغسلة (دج)", min_value=100, value=250, step=10)
     dryer_unit_price = st.number_input("سعر وحدة التجفيف (12د)", min_value=0, value=100, step=5)
-    dryer_units = st.number_input("متوسط وحدات التجفيف/زبون", min_value=0.0, value=2.0, step=1)
+    dryer_units = st.number_input("متوسط وحدات التجفيف/زبون", min_value=0, value=2, step=1)
 
 with col2:
     st.info("📈 حجم الإقبال والعمل")
