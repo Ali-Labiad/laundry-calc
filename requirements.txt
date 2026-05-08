@@ -3,5 +3,3 @@ pandas
 matplotlib
 numpy
 Pillow
-arabic-reshaper
-python-bidi
