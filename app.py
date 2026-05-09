@@ -1,33 +1,35 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 
-# 1. Page Configuration & Professional Theme
-st.set_page_config(page_title="Laundro-Sim Pro v9.5", layout="wide")
+# 1. إعدادات الصفحة والهوية البصرية
+st.set_page_config(page_title="Laundro-Sim Pro v9.7", layout="wide")
 
-# 2. Financial Engine (Optimized Logic)
+# 2. المحرك المالي الاحترافي
 def calculate_financials(data):
-    # Total Capital Expenditure (CapEx)
-    total_inv = (data['wash_12_qty'] * data['price_w12']) + \
-                (data['wash_18_qty'] * data['price_w18']) + \
-                (data['dryer_qty'] * data['price_dryer']) + \
+    # إجمالي الاستثمار الرأسمالي (CapEx)
+    total_inv = (data['w12_qty'] * data['p_w12']) + \
+                (data['w18_qty'] * data['p_w18']) + \
+                (data['dryer_qty'] * data['p_dryer']) + \
                 data['setup_costs']
     
-    # Per-customer Drying Profit: Units * (Unit Price - Energy Cost)
-    dry_profit_per_user = data['dry_units_per_user'] * (data['dry_unit_price'] - data['dry_unit_cost'])
+    # ربح التجفيف = عدد الوحدات * (سعر الوحدة - تكلفة الطاقة)
+    dry_profit_per_user = data['dry_units'] * (data['dry_price'] - data['dry_cost'])
     
-    # Operation Margins (Service Price + Drying Profit - Detergents - Maintenance)
-    maint_buffer = 20 # Fixed maintenance reserve per cycle (DZD)
-    margin_w12 = (data['service_p_w12'] + dry_profit_per_user) - (data['detergent_w12'] + maint_buffer)
-    margin_w18 = (data['service_p_w18'] + dry_profit_per_user) - (data['detergent_w18'] + maint_buffer)
+    # هوامش الربح لكل دورة غسيل (تشمل ربح التجفيف الملحق)
+    maint_buffer = 20  # احتياطي صيانة لكل غسلة
+    margin_w12 = (data['srv_p_w12'] + dry_profit_per_user) - (data['det_w12'] + maint_buffer)
+    margin_w18 = (data['srv_p_w18'] + dry_profit_per_user) - (data['det_w18'] + maint_buffer)
     
-    # Monthly Revenue Calculations
-    monthly_gross = ((margin_w12 * data['cust_w12_daily']) + (margin_w18 * data['cust_w18_daily'])) * data['work_days']
+    # التدفق المالي الشهري الإجمالي
+    monthly_gross = ((margin_w12 * data['w12_daily']) + (margin_w18 * data['w18_daily'])) * data['work_days']
     
-    # Fixed Costs & Monthly Depreciation
+    # حساب الإهلاك الشهري (تآكل قيمة الأجهزة)
     monthly_depreciation = (total_inv - data['setup_costs']) / (max(data['dep_years'], 1) * 12)
-    total_fixed_monthly = data['op_fixed_costs'] + monthly_depreciation
     
-    # Final Metrics
+    # المصاريف الثابتة الكلية (كراء + رواتب + إهلاك)
+    total_fixed_monthly = data['fixed_costs'] + monthly_depreciation
+    
+    # المقاييس النهائية
     net_profit = monthly_gross - total_fixed_monthly
     avg_margin = (margin_w12 + margin_w18) / 2
     break_even = total_fixed_monthly / avg_margin if avg_margin > 0 else 0
@@ -38,90 +40,91 @@ def calculate_financials(data):
         "break_even": int(break_even),
         "total_fixed": int(total_fixed_monthly),
         "depreciation": int(monthly_depreciation),
-        "dry_revenue_share": int(dry_profit_per_user * (data['cust_w12_daily'] + data['cust_w18_daily']) * data['work_days'])
+        "dry_contribution": int(dry_profit_per_user * (data['w12_daily'] + data['w18_daily']) * data['work_days'])
     }
 
-# --- Interface Setup ---
-st.title("📊 Laundro-Sim Pro v9.5")
-st.markdown("##### *Professional Investment Dashboard - Algerian Dinar (DZD)*")
+# --- واجهة المستخدم (UI) ---
+st.title("📊 محاكي مشروع المغسلة الذكية")
+st.markdown("##### *لوحة تخطيط الاستثمار والربحية - جيجل، الجزائر*")
 st.divider()
 
-# Helper for Currency Formatting
-def f_dzd(val): return f"{val:,.0f} DZD"
+# دالة لتنسيق المبالغ المالية بالدينار الجزائري
+def fmt_dzd(val): return f"{val:,.0f} دج"
 
-# --- Main Dashboard Columns ---
-col_input, col_output = st.columns([2.2, 1])
+# تقسيم الواجهة إلى قسمين
+col_inputs, col_results = st.columns([2.3, 1])
 
-with col_input:
-    st.subheader("⚙️ Input Parameters")
+with col_inputs:
+    st.subheader("⚙️ مدخلات البيانات")
     
-    # Section 1: Asset Investment (CapEx)
-    with st.expander("🏗️ 1. Equipment & Setup (Assets)", expanded=True):
+    # 1. تكاليف الأصول والاستثمار الأولي
+    with st.expander("🏗️ 1. Equipment & Fixed Assets (الأجهزة والتهيئة)", expanded=True):
         c1, c2, c3 = st.columns(3)
         p_w12 = c1.number_input("Unit Price: Wash 12kg", value=180000, step=5000)
         p_w18 = c2.number_input("Unit Price: Wash 18kg", value=320000, step=5000)
         p_dry = c3.number_input("Unit Price: Dryer", value=150000, step=5000)
-        setup = st.number_input("Setup Costs (Plumbing, Decor, Gas)", value=200000, step=10000)
+        setup_c = st.number_input("Setup & Renovation (تهيئة المحل)", value=200000, step=10000)
 
-    # Section 2: Service Pricing & Daily Flow
-    st.subheader("💰 2. Daily Operations")
+    # 2. تسعير الخدمات والتدفق اليومي
+    st.subheader("💰 2. Daily Operations (التشغيل اليومي)")
     o1, o2 = st.columns(2)
     with o1:
-        st.info("Wash 12kg Service")
-        p_srv_12 = st.number_input("Service Price", value=50, step=10, key="p12")
-        d_cust_12 = st.number_input("Daily Customers", value=12, step=1, key="d12")
+        st.info("Wash 12kg (Small)")
+        srv_p_12 = st.number_input("Service Price (DZD)", value=50, step=10, key="srv12")
+        daily_12 = st.number_input("Daily Customers", value=12, step=1, key="day12")
     
     with o2:
-        st.info("Wash 18kg Service")
-        p_srv_18 = st.number_input("Service Price ", value=70, step=10, key="p18")
-        d_cust_18 = st.number_input("Daily Customers ", value=8, step=1, key="d18")
+        st.info("Wash 18kg (Large)")
+        srv_p_18 = st.number_input("Service Price (DZD) ", value=70, step=10, key="srv18")
+        daily_18 = st.number_input("Daily Customers ", value=8, step=1, key="day18")
 
-    # Section 3: Drying Logic & Fixed Expenses
-    st.subheader("🔥 3. Drying Logic & Overhead")
+    # 3. إعدادات التجفيف والمصاريف الثابتة
+    st.subheader("🔥 3. Drying & Fixed Costs (التجفيف والمصاريف)")
     d1, d2, d3 = st.columns(3)
-    dry_up = d1.number_input("Drying Unit Price", value=100, step=10)
-    dry_uu = d2.number_input("Avg Units per Wash", value=2.0, step=0.5)
-    fix_op = d3.number_input("Rent & Salaries", value=45000, step=1000)
+    dry_up = d1.number_input("Dry Unit Price", value=100, step=10)
+    dry_units = d2.number_input("Units per User", value=2.0, step=0.5)
+    fixed_op = d3.number_input("Fixed Costs (رواتب وكراء)", value=45000, step=1000)
 
-# --- Calculation Trigger ---
-data = {
-    'wash_12_qty': 3, 'price_w12': p_w12, 'service_p_w12': p_srv_12, 'detergent_w12': 110, 'cust_w12_daily': d_cust_12,
-    'wash_18_qty': 2, 'price_w18': p_w18, 'service_p_w18': p_srv_18, 'detergent_w18': 180, 'cust_w18_daily': d_cust_18,
-    'dryer_qty': 3, 'price_dryer': p_dry, 'dry_unit_price': dry_up, 'dry_unit_cost': 15, 'dry_units_per_user': dry_uu,
-    'work_days': 30, 'op_fixed_costs': fix_op, 'setup_costs': setup, 'dep_years': 5
+# تجميع البيانات وإجراء الحسابات
+data_bundle = {
+    'w12_qty': 3, 'p_w12': p_w12, 'srv_p_w12': srv_p_12, 'det_w12': 110, 'w12_daily': daily_12,
+    'w18_qty': 2, 'p_w18': p_w18, 'srv_p_w18': srv_p_18, 'det_w18': 180, 'w18_daily': daily_18,
+    'dryer_qty': 3, 'p_dryer': p_dry, 'dry_price': dry_up, 'dry_cost': 15, 'dry_units': dry_units,
+    'work_days': 30, 'fixed_costs': fixed_op, 'setup_costs': setup_c, 'dep_years': 5
 }
 
-res = calculate_financials(data)
+res = calculate_financials(data_bundle)
 
-# --- Results Dashboard ---
-with col_output:
-    st.subheader("📈 Summary Results")
+# --- عرض النتائج في العمود الجانبي ---
+with col_results:
+    st.subheader("📈 ملخص التحليل المالي")
     
-    # Net Profit Card
-    profit_color = "green" if res['net_profit'] > 0 else "red"
+    # بطاقة الربح الصافي
+    res_color = "green" if res['net_profit'] > 0 else "red"
     st.markdown(f"""
-    <div style="padding:20px; border-radius:10px; background-color:#f0f2f6; border-left: 8px solid {profit_color};">
-        <p style="margin:0; font-weight:bold; color:#31333F;">MONTHLY NET PROFIT</p>
-        <h2 style="margin:0; color:{profit_color};">{f_dzd(res['net_profit'])}</h2>
+    <div style="padding:20px; border-radius:10px; background-color:#f8f9fa; border-right: 10px solid {res_color}; text-align:right;">
+        <p style="margin:0; font-size:14px; color:#555;">الربح الصافي الشهري</p>
+        <h2 style="margin:0; color:{res_color};">{fmt_dzd(res['net_profit'])}</h2>
     </div>
     """, unsafe_allow_html=True)
     
-    st.metric("Total Investment", f_dzd(res['total_inv']))
-    st.metric("Break-even Point", f"{res['break_even']} Customers/Month")
-    st.metric("Monthly Depreciation", f_dzd(res['depreciation']))
+    st.metric("إجمالي رأس المال المطلوب", fmt_dzd(res['total_inv']))
+    st.metric("نقطة التعادل (زبون/شهر)", f"{res['break_even']} زبون")
+    st.metric("الإهلاك الشهري للأجهزة", fmt_dzd(res['depreciation']))
     
     st.divider()
     
-    # Visual Analytics
-    fig, ax = plt.subplots(figsize=(5, 4.5))
-    categories = ['Fixed + Depr.', 'Drying Income']
-    values = [res['total_fixed'], res['dry_revenue_share']]
-    ax.bar(categories, values, color=['#e74c3c', '#2ecc71'])
-    ax.set_title("Opex vs. Drying Contribution")
+    # الرسم البياني التحليلي بالإنجليزية
+    fig, ax = plt.subplots(figsize=(5, 4))
+    labels = ['Fixed Costs', 'Drying Profit']
+    values = [res['total_fixed'], res['dry_contribution']]
+    ax.bar(labels, values, color=['#e74c3c', '#2ecc71'])
+    ax.set_title("Opex vs. Drying Revenue (Monthly)")
+    ax.set_ylabel("DZD Amount")
     st.pyplot(fig)
 
     if res['net_profit'] <= 0:
-        st.error("Financial Warning: Revenue is below the total fixed costs. Adjust pricing or increase daily customers.")
+        st.error("تنبيه: المشروع يسجل خسارة تشغيلية. يرجى رفع سعر الخدمة أو زيادة عدد الوحدات المستهلكة في التجفيف.")
 
 st.markdown("---")
-st.caption("Developed for Professional Investment Planning | Currency: DZD | Logic: Units-Based Drying")
+st.caption("Laundro-Sim Pro v9.7 | عملة النظام: الدينار الجزائري (DZD) | لغة التقارير: English Charts & Arabic UI")
