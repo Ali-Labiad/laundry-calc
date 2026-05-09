@@ -1,130 +1,120 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 
-# 1. إعدادات الصفحة والهوية البصرية
-st.set_page_config(page_title="Laundro-Sim Pro v9.7", layout="wide")
+# 1. إعدادات الصفحة والتنسيق الاحترافي
+st.set_page_config(page_title="Laundro-Sim Pro v9.9", layout="wide")
 
-# 2. المحرك المالي الاحترافي
+# 2. دالة التنسيق المالي (The Monetary Formatter)
+# هذه الدالة تحول الرقم العادي إلى شكل مالي سهل القراءة جداً
+def dzd_format(value):
+    return f"{value:,.0f} دج"
+
+# 3. المحرك المالي المعتمد
 def calculate_financials(data):
-    # إجمالي الاستثمار الرأسمالي (CapEx)
-    total_inv = (data['w12_qty'] * data['p_w12']) + \
-                (data['w18_qty'] * data['p_w18']) + \
-                (data['dryer_qty'] * data['p_dryer']) + \
-                data['setup_costs']
+    total_inv = (data['qty_w12'] * data['p_w12']) + (data['qty_w18'] * data['p_w18']) + \
+                (data['qty_dr'] * data['p_dr']) + data['setup']
     
-    # ربح التجفيف = عدد الوحدات * (سعر الوحدة - تكلفة الطاقة)
-    dry_profit_per_user = data['dry_units'] * (data['dry_price'] - data['dry_cost'])
+    dry_profit_per_user = data['dry_units'] * (data['dry_p'] - data['dry_c'])
+    margin_w12 = (data['srv_w12'] + dry_profit_per_user) - (110 + 20)
+    margin_w18 = (data['srv_w18'] + dry_profit_per_user) - (180 + 20)
     
-    # هوامش الربح لكل دورة غسيل (تشمل ربح التجفيف الملحق)
-    maint_buffer = 20  # احتياطي صيانة لكل غسلة
-    margin_w12 = (data['srv_p_w12'] + dry_profit_per_user) - (data['det_w12'] + maint_buffer)
-    margin_w18 = (data['srv_p_w18'] + dry_profit_per_user) - (data['det_w18'] + maint_buffer)
+    monthly_gross = ((margin_w12 * data['cust_12']) + (margin_w18 * data['cust_18'])) * 30
+    monthly_dep = (total_inv - data['setup']) / (5 * 12)
+    total_fixed = data['fixed'] + monthly_dep
     
-    # التدفق المالي الشهري الإجمالي
-    monthly_gross = ((margin_w12 * data['w12_daily']) + (margin_w18 * data['w18_daily'])) * data['work_days']
-    
-    # حساب الإهلاك الشهري (تآكل قيمة الأجهزة)
-    monthly_depreciation = (total_inv - data['setup_costs']) / (max(data['dep_years'], 1) * 12)
-    
-    # المصاريف الثابتة الكلية (كراء + رواتب + إهلاك)
-    total_fixed_monthly = data['fixed_costs'] + monthly_depreciation
-    
-    # المقاييس النهائية
-    net_profit = monthly_gross - total_fixed_monthly
-    avg_margin = (margin_w12 + margin_w18) / 2
-    break_even = total_fixed_monthly / avg_margin if avg_margin > 0 else 0
+    net_profit = monthly_gross - total_fixed
     
     return {
-        "total_inv": total_inv,
-        "net_profit": int(net_profit),
-        "break_even": int(break_even),
-        "total_fixed": int(total_fixed_monthly),
-        "depreciation": int(monthly_depreciation),
-        "dry_contribution": int(dry_profit_per_user * (data['w12_daily'] + data['w18_daily']) * data['work_days'])
+        "total_inv": total_inv, "net_profit": int(net_profit),
+        "break_even": int(total_fixed / ((margin_w12 + margin_w18) / 2)) if (margin_w12 + margin_w18) > 0 else 0,
+        "total_fixed": int(total_fixed), "depreciation": int(monthly_dep),
+        "dry_share": int(dry_profit_per_user * (data['cust_12'] + data['cust_18']) * 30)
     }
 
-# --- واجهة المستخدم (UI) ---
-st.title("📊 محاكي مشروع المغسلة الذكية")
-st.markdown("##### *لوحة تخطيط الاستثمار والربحية - جيجل، الجزائر*")
+# --- واجهة المستخدم الرئيسية ---
+st.title("🚀 محاكي المغسلة الذكية - v9.9")
+st.markdown("##### *تنسيق مالي شامل لجميع الأسعار بدون استثناء*")
 st.divider()
 
-# دالة لتنسيق المبالغ المالية بالدينار الجزائري
-def fmt_dzd(val): return f"{val:,.0f} دج"
+col_in, col_out = st.columns([2.2, 1])
 
-# تقسيم الواجهة إلى قسمين
-col_inputs, col_results = st.columns([2.3, 1])
-
-with col_inputs:
-    st.subheader("⚙️ مدخلات البيانات")
+with col_in:
+    st.subheader("📝 إدخال البيانات (المنسق المالي مفعل)")
     
-    # 1. تكاليف الأصول والاستثمار الأولي
-    with st.expander("🏗️ 1. Equipment & Fixed Assets (الأجهزة والتهيئة)", expanded=True):
+    # القسم الأول: الاستثمارات
+    with st.expander("🏗️ 1. تكاليف الأصول والتجهيز", expanded=True):
         c1, c2, c3 = st.columns(3)
-        p_w12 = c1.number_input("Unit Price: Wash 12kg", value=180000, step=5000)
-        p_w18 = c2.number_input("Unit Price: Wash 18kg", value=320000, step=5000)
-        p_dry = c3.number_input("Unit Price: Dryer", value=150000, step=5000)
-        setup_c = st.number_input("Setup & Renovation (تهيئة المحل)", value=200000, step=10000)
+        p_w12 = c1.number_input("سعر غسالة 12 كغ", value=180000, step=5000, format="%d")
+        st.write(f"🔍 {dzd_format(p_w12)}") # Formatter مالي أسفل الحقل
+        
+        p_w18 = c2.number_input("سعر غسالة 18 كغ", value=320000, step=5000, format="%d")
+        st.write(f"🔍 {dzd_format(p_w18)}")
+        
+        p_dr = c3.number_input("سعر المجفف", value=150000, step=5000, format="%d")
+        st.write(f"🔍 {dzd_format(p_dr)}")
+        
+        setup_c = st.number_input("تكاليف التهيئة والديكور", value=200000, step=10000, format="%d")
+        st.write(f"🔍 المجموع: {dzd_format(setup_c)}")
 
-    # 2. تسعير الخدمات والتدفق اليومي
-    st.subheader("💰 2. Daily Operations (التشغيل اليومي)")
+    # القسم الثاني: التشغيل
+    st.subheader("💰 2. تسعير الخدمات")
     o1, o2 = st.columns(2)
     with o1:
-        st.info("Wash 12kg (Small)")
-        srv_p_12 = st.number_input("Service Price (DZD)", value=50, step=10, key="srv12")
-        daily_12 = st.number_input("Daily Customers", value=12, step=1, key="day12")
+        st.info("الغسالة الصغيرة (12 كغ)")
+        srv_12 = st.number_input("سعر الخدمة (دج)", value=50, step=10, format="%d")
+        st.write(f"📝 {dzd_format(srv_12)}")
+        c_12 = st.number_input("عدد الزبائن يومياً", value=12, step=1)
     
     with o2:
-        st.info("Wash 18kg (Large)")
-        srv_p_18 = st.number_input("Service Price (DZD) ", value=70, step=10, key="srv18")
-        daily_18 = st.number_input("Daily Customers ", value=8, step=1, key="day18")
+        st.info("الغسالة الكبيرة (18 كغ)")
+        srv_18 = st.number_input("سعر الخدمة (دج) ", value=70, step=10, format="%d")
+        st.write(f"📝 {dzd_format(srv_18)}")
+        c_18 = st.number_input("عدد الزبائن يومياً ", value=8, step=1)
 
-    # 3. إعدادات التجفيف والمصاريف الثابتة
-    st.subheader("🔥 3. Drying & Fixed Costs (التجفيف والمصاريف)")
+    # القسم الثالث: التجفيف والمصاريف
+    st.subheader("🔥 3. نظام التجفيف والمصاريف")
     d1, d2, d3 = st.columns(3)
-    dry_up = d1.number_input("Dry Unit Price", value=100, step=10)
-    dry_units = d2.number_input("Units per User", value=2.0, step=0.5)
-    fixed_op = d3.number_input("Fixed Costs (رواتب وكراء)", value=45000, step=1000)
-
-# تجميع البيانات وإجراء الحسابات
-data_bundle = {
-    'w12_qty': 3, 'p_w12': p_w12, 'srv_p_w12': srv_p_12, 'det_w12': 110, 'w12_daily': daily_12,
-    'w18_qty': 2, 'p_w18': p_w18, 'srv_p_w18': srv_p_18, 'det_w18': 180, 'w18_daily': daily_18,
-    'dryer_qty': 3, 'p_dryer': p_dry, 'dry_price': dry_up, 'dry_cost': 15, 'dry_units': dry_units,
-    'work_days': 30, 'fixed_costs': fixed_op, 'setup_costs': setup_c, 'dep_years': 5
-}
-
-res = calculate_financials(data_bundle)
-
-# --- عرض النتائج في العمود الجانبي ---
-with col_results:
-    st.subheader("📈 ملخص التحليل المالي")
+    d_p = d1.number_input("سعر وحدة التجفيف", value=100, step=10, format="%d")
+    st.write(f"🔥 {dzd_format(d_p)}")
     
-    # بطاقة الربح الصافي
-    res_color = "green" if res['net_profit'] > 0 else "red"
+    d_u = d2.number_input("عدد الوحدات/زبون", value=2.0, step=0.5)
+    
+    f_c = d3.number_input("كراء + رواتب", value=45000, step=1000, format="%d")
+    st.write(f"🏢 {dzd_format(f_c)}")
+
+# الحسابات
+data = {
+    'qty_w12': 3, 'p_w12': p_w12, 'srv_w12': srv_12, 'cust_12': c_12,
+    'qty_w18': 2, 'p_w18': p_w18, 'srv_w18': srv_18, 'cust_18': c_18,
+    'qty_dr': 3, 'p_dr': p_dr, 'dry_p': d_p, 'dry_c': 15, 'dry_units': d_u,
+    'fixed': f_c, 'setup': setup_c
+}
+res = calculate_financials(data)
+
+with col_out:
+    st.subheader("📊 لوحة التحليل المالي")
+    
+    # عرض الربح مع التنسيق المالي
+    p_color = "green" if res['net_profit'] > 0 else "red"
     st.markdown(f"""
-    <div style="padding:20px; border-radius:10px; background-color:#f8f9fa; border-right: 10px solid {res_color}; text-align:right;">
-        <p style="margin:0; font-size:14px; color:#555;">الربح الصافي الشهري</p>
-        <h2 style="margin:0; color:{res_color};">{fmt_dzd(res['net_profit'])}</h2>
+    <div style="padding:15px; border-radius:10px; background-color:#f8f9fa; border-right: 8px solid {p_color}; text-align:right;">
+        <p style="margin:0; font-size:16px;">صافي الربح الشهري</p>
+        <h2 style="margin:0; color:{p_color};">{dzd_format(res['net_profit'])}</h2>
     </div>
     """, unsafe_allow_html=True)
     
-    st.metric("إجمالي رأس المال المطلوب", fmt_dzd(res['total_inv']))
-    st.metric("نقطة التعادل (زبون/شهر)", f"{res['break_even']} زبون")
-    st.metric("الإهلاك الشهري للأجهزة", fmt_dzd(res['depreciation']))
+    st.metric("رأس المال المطلوب", dzd_format(res['total_inv']))
+    st.metric("الإهلاك الشهري", dzd_format(res['depreciation']))
+    st.metric("نقطة التعادل", f"{res['break_even']} زبون/شهر")
     
     st.divider()
     
-    # الرسم البياني التحليلي بالإنجليزية
+    # الرسم البياني (English Labels)
     fig, ax = plt.subplots(figsize=(5, 4))
-    labels = ['Fixed Costs', 'Drying Profit']
-    values = [res['total_fixed'], res['dry_contribution']]
-    ax.bar(labels, values, color=['#e74c3c', '#2ecc71'])
-    ax.set_title("Opex vs. Drying Revenue (Monthly)")
-    ax.set_ylabel("DZD Amount")
+    ax.bar(['Operating Costs', 'Drying Profit'], [res['total_fixed'], res['dry_share']], color=['#FF4B4B', '#2ECC71'])
+    ax.set_title("Financial Performance (Monthly)")
+    ax.set_ylabel("Amount (DZD)")
     st.pyplot(fig)
 
-    if res['net_profit'] <= 0:
-        st.error("تنبيه: المشروع يسجل خسارة تشغيلية. يرجى رفع سعر الخدمة أو زيادة عدد الوحدات المستهلكة في التجفيف.")
-
 st.markdown("---")
-st.caption("Laundro-Sim Pro v9.7 | عملة النظام: الدينار الجزائري (DZD) | لغة التقارير: English Charts & Arabic UI")
+st.caption("تم تطبيق المنسق المالي (DZD Formatter) على جميع الحقول لضمان دقة القراءة.")
