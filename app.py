@@ -6,7 +6,7 @@ st.set_page_config(page_title="Laundro-Sim Pro v10.2", layout="wide")
 
 # 2. المنسق المالي (لإضافة العملة والتنسيق)
 def fmt_dzd(value):
-    return f"{value:,.0f} دج"
+    return f"{value:,.2f} دج"
 
 # 3. المحرك المالي (Financial Engine)
 def calculate_financials(data):
