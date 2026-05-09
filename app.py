@@ -6,20 +6,20 @@ import matplotlib.pyplot as plt
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# 1. إعدادات الصفحة
-st.set_page_config(page_title="Laundro-Sim Pro SQL Edition", layout="wide")
+# 1. إعدادات الصفحة والجماليات
+st.set_page_config(page_title="Laundro-Sim Pro v7.0 (Final)", layout="wide")
 
 def fix_ar(text):
     try: return get_display(reshape(text))
     except: return text
 
-# 2. طبقة قاعدة البيانات (SQLite Layer)
-DB_FILE = "laundry_data.db"
+# 2. طبقة قاعدة البيانات (SQLite Persistence Layer)
+DB_FILE = "laundry_final.db"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS laundry_settings
+    c.execute('''CREATE TABLE IF NOT EXISTS settings
                  (key TEXT PRIMARY KEY, value REAL)''')
     conn.commit()
     conn.close()
@@ -27,23 +27,24 @@ def init_db():
 def save_to_db(key, value):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO laundry_settings (key, value) VALUES (?, ?)", (key, value))
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
     conn.close()
 
-def load_all_from_db():
+def load_from_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT key, value FROM laundry_settings")
-    data = dict(c.fetchall())
+    c.execute("SELECT key, value FROM settings")
+    # تحويل الأرقام إلى int إذا كانت صحيحة لتحسين المظهر
+    data = {k: (int(v) if v == int(v) else v) for k, v in c.fetchall()}
     conn.close()
     return data
 
 # 3. تهيئة البيانات (Initialization)
 init_db()
-db_cache = load_all_from_db()
+db_cache = load_from_db()
 
-# القيم الافتراضية الأصلية
+# القيم الافتراضية للمشروع (الأسعار المحدثة: 50/70 دج)
 DEFAULTS = {
     'n_w1': 3, 'p_w1': 180000, 'w1_p': 50, 'w1_c': 110, 'w1_d': 12,
     'n_w2': 2, 'p_w2': 320000, 'w2_p': 70, 'w2_c': 180, 'w2_d': 8,
@@ -51,85 +52,89 @@ DEFAULTS = {
     'd_pm': 30, 'sal': 35000, 'f_ex': 10000, 'other_inv': 200000, 'dep_years': 5
 }
 
-# دالة مزامنة التغييرات
-def sync_db(key):
-    # تحديث الذاكرة الدائمة وقاعدة البيانات فوراً
+# دالة مزامنة SQL و الذاكرة اللحظية
+def sync_data(key):
     val = st.session_state[f"ui_{key}"]
     save_to_db(key, val)
     st.session_state[key] = val
 
-# تحميل البيانات من SQL إلى Session State
+# تحميل البيانات عند بدء التشغيل
 for key, def_val in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = db_cache.get(key, def_val)
 
-st.title("🚀 محاكي المغسلة الذكية - نسخة SQL المستقرة")
-st.info("💾 جميع البيانات محفوظة في `laundry_data.db`. التحديث (Refresh) لن يمسح مدخلاتك.")
+# --- واجهة المستخدم الرئيسية ---
+st.title("🚀 محاكي المغسلة الذكية - النسخة النهائية v7.0")
+st.info("💾 تم تفعيل SQLite: جميع بياناتك محفوظة في ملف `laundry_final.db` حتى بعد إغلاق المتصفح.")
 
-# --- القسم الأول: الأصول (Assets) ---
-with st.expander("🏗️ 1. هيكل الاستثمار (قاعدة البيانات نشطة)", expanded=True):
-    c_inv1, c_inv2, c_inv3 = st.columns(3)
-    with c_inv1:
+# --- القسم الأول: الأصول والاستثمار ---
+with st.expander("🏗️ 1. هيكل الاستثمار (الأصول الثابتة)", expanded=True):
+    c1, c2, c3 = st.columns(3)
+    with c1:
         st.markdown("### 🧺 غسالات 12kg")
-        st.number_input("العدد", value=float(st.session_state.n_w1), key="ui_n_w1", on_change=sync_db, args=("n_w1",))
-        st.number_input("السعر (دج)", value=float(st.session_state.p_w1), key="ui_p_w1", on_change=sync_db, args=("p_w1",))
-    with c_inv2:
+        st.number_input("العدد", value=int(st.session_state.n_w1), step=1, key="ui_n_w1", on_change=sync_data, args=("n_w1",))
+        st.number_input("سعر الجهاز الواحد (دج)", value=int(st.session_state.p_w1), step=1000, key="ui_p_w1", on_change=sync_data, args=("p_w1",))
+    with c2:
         st.markdown("### 🐘 غسالات 18kg")
-        st.number_input("العدد ", value=float(st.session_state.n_w2), key="ui_n_w2", on_change=sync_db, args=("n_w2",))
-        st.number_input("السعر  (دج)", value=float(st.session_state.p_w2), key="ui_p_w2", on_change=sync_db, args=("p_w2",))
-    with c_inv3:
+        st.number_input("العدد ", value=int(st.session_state.n_w2), step=1, key="ui_n_w2", on_change=sync_data, args=("n_w2",))
+        st.number_input("سعر الجهاز الواحد  (دج)", value=int(st.session_state.p_w2), step=1000, key="ui_p_w2", on_change=sync_data, args=("p_w2",))
+    with c3:
         st.markdown("### 🔥 مجففات الغاز")
-        st.number_input("العدد  ", value=float(st.session_state.n_dr), key="ui_n_dr", on_change=sync_db, args=("n_dr",))
-        st.number_input("السعر   (دج)", value=float(st.session_state.p_dr), key="ui_p_dr", on_change=sync_db, args=("p_dr",))
+        st.number_input("العدد  ", value=int(st.session_state.n_dr), step=1, key="ui_n_dr", on_change=sync_data, args=("n_dr",))
+        st.number_input("سعر المجفف الواحد (دج)", value=int(st.session_state.p_dr), step=1000, key="ui_p_dr", on_change=sync_data, args=("p_dr",))
 
     st.divider()
-    c_inv_a, c_inv_b = st.columns(2)
-    st.session_state.other_inv = c_inv_a.number_input("مصاريف تأسيس أخرى", value=float(st.session_state.other_inv), key="ui_other_inv", on_change=sync_db, args=("other_inv",))
-    st.session_state.dep_years = c_inv_b.slider("سنوات الإهلاك", 1, 15, value=int(st.session_state.dep_years), key="ui_dep_years", on_change=sync_db, args=("dep_years",))
+    ca, cb = st.columns(2)
+    st.session_state.other_inv = ca.number_input("مصاريف تأسيس إضافية (ديكور، سباكة)", value=int(st.session_state.other_inv), step=1000, key="ui_other_inv", on_change=sync_data, args=("other_inv",))
+    st.session_state.dep_years = cb.slider("العمر الافتراضي لتجديد الأجهزة (سنوات)", 1, 15, value=int(st.session_state.dep_years), key="ui_dep_years", on_change=sync_data, args=("dep_years",))
 
-# --- القسم الثاني: التشغيل ---
-st.header("💰 2. التشغيل والأسعار")
-col_opt1, col_opt2 = st.columns(2)
-with col_opt1:
-    st.number_input("سعر غسلة (12kg)", value=float(st.session_state.w1_p), key="ui_w1_p", on_change=sync_db, args=("w1_p",))
-    st.number_input("زبائن (12kg) يومياً", value=float(st.session_state.w1_d), key="ui_w1_d", on_change=sync_db, args=("w1_d",))
-    st.number_input("تكلفة منظفات (12kg)", value=float(st.session_state.w1_c), key="ui_w1_c", on_change=sync_db, args=("w1_c",))
+# --- القسم الثاني: التشغيل والأسعار ---
+st.header("💰 2. إدارة التشغيل والمداخيل")
+o1, o2 = st.columns(2)
+with o1:
+    st.markdown("#### 🎫 أسعار الخدمات")
+    st.number_input("سعر الغسلة (12kg)", value=int(st.session_state.w1_p), step=10, key="ui_w1_p", on_change=sync_data, args=("w1_p",))
+    st.number_input("زبائن يومياً (12kg)", value=int(st.session_state.w1_d), step=1, key="ui_w1_d", on_change=sync_data, args=("w1_d",))
     st.write("---")
-    st.number_input("سعر غسلة (18kg)", value=float(st.session_state.w2_p), key="ui_w2_p", on_change=sync_db, args=("w2_p",))
-    st.number_input("زبائن (18kg) يومياً", value=float(st.session_state.w2_d), key="ui_w2_d", on_change=sync_db, args=("w2_d",))
+    st.number_input("سعر الغسلة (18kg)", value=int(st.session_state.w2_p), step=10, key="ui_w2_p", on_change=sync_data, args=("w2_p",))
+    st.number_input("زبائن يومياً (18kg)", value=int(st.session_state.w2_d), step=1, key="ui_w2_d", on_change=sync_data, args=("w2_d",))
 
-with col_opt2:
-    st.number_input("سعر وحدة التجفيف", value=float(st.session_state.d_up), key="ui_d_up", on_change=sync_db, args=("d_up",))
-    st.number_input("الرواتب الشهرية", value=float(st.session_state.sal), key="ui_sal", on_change=sync_db, args=("sal",))
-    st.number_input("إيجار ومصاريف ثابتة", value=float(st.session_state.f_ex), key="ui_f_ex", on_change=sync_db, args=("f_ex",))
-    st.number_input("أيام التشغيل", value=float(st.session_state.d_pm), key="ui_d_pm", on_change=sync_db, args=("d_pm",))
+with o2:
+    st.markdown("#### 🛠️ التكاليف الثابتة والتجفيف")
+    st.number_input("سعر وحدة التجفيف (15د)", value=int(st.session_state.d_up), step=10, key="ui_d_up", on_change=sync_data, args=("d_up",))
+    st.number_input("رواتب العمال شهرياً", value=int(st.session_state.sal), step=1000, key="ui_sal", on_change=sync_data, args=("sal",))
+    st.number_input("الإيجار والفواتير", value=int(st.session_state.f_ex), step=1000, key="ui_f_ex", on_change=sync_data, args=("f_ex",))
+    st.number_input("أيام العمل في الشهر", value=int(st.session_state.d_pm), min_value=1, max_value=31, key="ui_d_pm", on_change=sync_data, args=("d_pm",))
 
-# --- الحسابات المالية (Business Logic) ---
-# جلب القيم الحالية من الذاكرة
+# --- محرك الحسابات المالي ---
 n1, p1, n2, p2, n_dr, p_dr = st.session_state.n_w1, st.session_state.p_w1, st.session_state.n_w2, st.session_state.p_w2, st.session_state.n_dr, st.session_state.p_dr
-total_investment = (n1*p1) + (n2*p2) + (n_dr*p_dr) + st.session_state.other_inv
+total_investment = int((n1*p1) + (n2*p2) + (n_dr*p_dr) + st.session_state.other_inv)
 
-maint = 20
-dry_profit = (st.session_state.d_ua * st.session_state.d_up) - (st.session_state.d_ua * st.session_state.d_ec)
-profit_w1 = (st.session_state.w1_p + dry_profit) - (st.session_state.w1_c + maint)
-profit_w2 = (st.session_state.w2_p + dry_profit) - (st.session_state.w2_c + maint)
+# تكاليف الصيانة والطاقة (افتراضية)
+maint_cost = 20
+dryer_energy = 15
+dry_net_per_cust = (st.session_state.d_ua * st.session_state.d_up) - (st.session_state.d_ua * dryer_energy)
+
+profit_w1 = (st.session_state.w1_p + dry_net_per_cust) - (st.session_state.w1_c + maint_cost)
+profit_w2 = (st.session_state.w2_p + dry_net_per_cust) - (st.session_state.w2_c + maint_cost)
 
 monthly_gross = ((profit_w1 * st.session_state.w1_d) + (profit_w2 * st.session_state.w2_d)) * st.session_state.d_pm
 monthly_depreciation = (total_investment - st.session_state.other_inv) / (max(st.session_state.dep_years, 1) * 12)
-net_profit = monthly_gross - (st.session_state.sal + st.session_state.f_ex + monthly_depreciation)
+net_profit_final = int(monthly_gross - (st.session_state.sal + st.session_state.f_ex + monthly_depreciation))
 
-# --- لوحة النتائج ---
+# --- لوحة النتائج النهائية ---
 st.divider()
-k1, k2, k3 = st.columns(3)
-k1.metric("صافي الربح الحقيقي", f"{net_profit:,.0f} دج")
-k2.metric("إجمالي الاستثمار", f"{total_investment:,.0f} دج")
-k3.metric("فترة الاسترداد", f"{total_investment/net_profit if net_profit > 0 else 0:.1f} شهر")
+k1, k2, k3, k4 = st.columns(4)
 
-# زر الحذف النهائي في الجانب
-if st.sidebar.button("🗑️ تصفير كل البيانات (SQL)"):
+k1.metric("صافي الربح الحقيقي", f"{net_profit_final:,} دج")
+k2.metric("إجمالي الاستثمار", f"{total_investment:,} دج")
+k3.metric("فترة الاسترداد", f"{total_investment/net_profit_final if net_profit_final > 0 else 0:.1f} شهر")
+k4.metric("الإهلاك الشهري", f"{int(monthly_depreciation):,} دج")
+
+# زر الحذف النهائي
+if st.sidebar.button("🗑️ تصفير كافة البيانات"):
     conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("DELETE FROM laundry_settings")
+    conn.cursor().execute("DELETE FROM settings")
     conn.commit()
     conn.close()
     st.rerun()
